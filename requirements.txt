@@ -1,0 +1,11 @@
+flask
+flask-cors
+pandas
+numpy
+scikit-learn
+joblib
+requests
+werkzeug
+networkx
+neo4j
+python-dotenv
