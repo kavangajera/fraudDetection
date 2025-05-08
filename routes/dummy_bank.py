@@ -234,3 +234,8 @@ def filtered_accounts():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+from flask import send_from_directory
+@bank_bp.route('/download-csv')
+def download_csv():
+    return send_from_directory(directory='data', path='acc_list_with_params.csv', as_attachment=True)
