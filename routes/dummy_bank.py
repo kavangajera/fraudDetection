@@ -163,12 +163,6 @@ def get_all_transactions():
         
         return jsonify({
             "transactions": transactions,
-            "metadata": {
-                "total": total_count,
-                # "limit": limit,
-                "skip": skip,
-                "count": len(transactions)
-            }
         })
         
     except Exception as e:
