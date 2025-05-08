@@ -88,10 +88,19 @@ def train_watchdog():
             # Add fraud scores
             df['fraud_score'] = fraud_scores
 
+            # Boost score if is_suspicious is True
+            if 'is_suspicious' in df.columns:
+                # Ensure it's boolean
+                df['is_suspicious'] = df['is_suspicious'].astype(bool)
+                
+                # Define how much to boost (e.g., add 0.2, then clip to max 1.0)
+                df.loc[df['is_suspicious'], 'fraud_score'] = np.clip(df.loc[df['is_suspicious'], 'fraud_score'] + 0.2, 0, 1)
+
+
             # Save results and models
-            scored_csv_path = os.path.join(UPLOAD_FOLDER, 'scored_fraud_data_optimized.csv')
-            model_path = os.path.join(MODEL_FOLDER, 'model', 'isolation_forest_model_fraud_focused.pkl')
-            scaler_path = os.path.join(MODEL_FOLDER, 'scaler', 'scaler_fraud_focused.pkl')
+            scored_csv_path = os.path.join(UPLOAD_FOLDER, 'scored_fraud_data_optimized_new.csv')
+            model_path = os.path.join(MODEL_FOLDER, 'model', 'isolation_forest_model_fraud_focused_new.pkl')
+            scaler_path = os.path.join(MODEL_FOLDER, 'scaler', 'scaler_fraud_focused_new.pkl')
 
             df.to_csv(scored_csv_path, index=False)
             joblib.dump(model, model_path)

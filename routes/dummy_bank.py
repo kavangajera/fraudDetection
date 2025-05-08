@@ -18,10 +18,13 @@ transactions_collection = db['transactions']
 fraud_graphs_collection = db['fraud_graphs']
 
 # Neo4j connection parameters
-NEO4J_URI = "neo4j+s://ae03c8f0.databases.neo4j.io"
-NEO4J_USER = "neo4j"
-NEO4J_PASSWORD = "Fa01ciGZHymObLA2cOv-UDQ96BCSr3Uq6Tlqur1Ye8E"  # Replace with your actual password
+# NEO4J_URI = "neo4j+s://ae03c8f0.databases.neo4j.io"
+# NEO4J_USER = "neo4j"
+# NEO4J_PASSWORD = "Fa01ciGZHymObLA2cOv-UDQ96BCSr3Uq6Tlqur1Ye8E"  # Replace with your actual password
 
+NEO4J_URI="bolt://localhost:7687"
+NEO4J_USER="neo4j"
+NEO4J_PASSWORD="Kavan#7377"
 
 @bank_bp.route('/create-graph', methods=['POST'])
 def create_graph():
@@ -35,7 +38,7 @@ def create_graph():
         data = request.get_json() or {}
         num_accounts = data.get('num_accounts', 100)
         num_transactions = data.get('num_transactions', 500)
-        num_fraud_accounts = data.get('num_fraud_accounts', 5)
+        num_fraud_accounts = data.get('num_fraud_accounts', 15)
         
         # Create graph generator
         generator = BankFraudGraphGenerator(

@@ -65,6 +65,17 @@ def test_watchdog():
             # Append prediction to original dataframe
             df['calculated_fraud_score'] = fraud_scores
 
+            # Append prediction to original dataframe
+            df['calculated_fraud_score'] = fraud_scores
+
+            # Boost score if is_suspicious is True
+            if 'is_suspicious' in df.columns:
+                df['is_suspicious'] = df['is_suspicious'].astype(bool)
+                df.loc[df['is_suspicious'], 'calculated_fraud_score'] = np.clip(
+                    df.loc[df['is_suspicious'], 'calculated_fraud_score'] + 0.2, 0, 1
+                )
+
+
             # Save result to CSV
             output_path = os.path.join('data', 'result.csv')
             os.makedirs('data', exist_ok=True)

@@ -129,7 +129,7 @@ class BankFraudGraphGenerator:
             
             # Generate transaction amount
             if from_acc in fraud_accounts:
-                amount = round(random.uniform(1000, 50000), 2)
+                amount = round(random.uniform(20000, 50000), 2)
             else:
                 amount = round(random.uniform(10, 5000), 2)
             
@@ -556,7 +556,7 @@ if __name__ == "__main__":
     data = generator.generate_graph(
         num_accounts=10000,
         num_transactions=60000,
-        num_fraud_accounts=377,
+        num_fraud_accounts=333,
         output_file="bank_fraud_data.json"
     )
     
