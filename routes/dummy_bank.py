@@ -250,4 +250,4 @@ def filtered_accounts():
 from flask import send_from_directory
 @bank_bp.route('/download-csv')
 def download_csv():
-    return send_from_directory(directory='data', path='acc_list_with_params.csv', as_attachment=True)
+    return send_from_directory(directory='data', path='scored_fraud_data_optimized_new.csv', as_attachment=True)
