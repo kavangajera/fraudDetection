@@ -1,169 +1,161 @@
-from flask import Blueprint, request, jsonify
-import os
-from dotenv import load_dotenv
-import sys
-import datetime
+from flask import Blueprint, jsonify, request
+import json
+import uuid
+from datetime import datetime
+from pymongo import MongoClient
+from bson.objectid import ObjectId
 
+# Import the BankFraudGraphGenerator class
+from network_creation import BankFraudGraphGenerator, FraudDetectionQueries
 
-from model.graph import Neo4jFraudDataGenerator
-from model.transaction import Transaction
-
-# Load environment variables
-load_dotenv()
-
-# Create blueprint
+# Create the blueprint
 bank_bp = Blueprint('bank', __name__)
+
+# MongoDB connection
+client = MongoClient('mongodb+srv://devarshi:Deva123@cluster0.8e2qpsv.mongodb.net/Bank2')
+db = client['bank_fraud_db']
+transactions_collection = db['transactions']
+fraud_graphs_collection = db['fraud_graphs']
+
+# Neo4j connection parameters
+NEO4J_URI = "neo4j+s://ae03c8f0.databases.neo4j.io"
+NEO4J_USER = "neo4j"
+NEO4J_PASSWORD = "Fa01ciGZHymObLA2cOv-UDQ96BCSr3Uq6Tlqur1Ye8E"  # Replace with your actual password
+
 
 @bank_bp.route('/create-graph', methods=['POST'])
 def create_graph():
     """
-    Create a graph of bank accounts and transactions with fraud patterns
-    
-    Expected JSON input:
-    {
-        "account_count": 10000,
-        "min_transactions": 60000,
-        "fraud_patterns": {
-            "cycle": 100,
-            "star": 150,
-            "chain": 80,
-            "layered": 70
-        },
-        "clear_db": true
-    }
+    Creates a bank fraud graph with specified parameters
+    Returns the number of accounts, transactions, and fraud accounts in JSON format
+    Stores the entire graph data in MongoDB
     """
     try:
-        data = request.get_json()
+        # Get parameters from request or use defaults
+        data = request.get_json() or {}
+        num_accounts = data.get('num_accounts', 100)
+        num_transactions = data.get('num_transactions', 500)
+        num_fraud_accounts = data.get('num_fraud_accounts', 5)
         
-        # Extract parameters from request
-        account_count = data.get('account_count', 10000)
-        min_transactions = data.get('min_transactions', account_count * 6)
-        fraud_patterns_config = data.get('fraud_patterns', {
-            'cycle': account_count // 40,
-            'star': account_count // 40,
-            'chain': account_count // 40,
-            'layered': account_count // 40
-        })
-        clear_db = data.get('clear_db', False)
-        
-        # Validate inputs
-        if not isinstance(account_count, int) or account_count <= 0:
-            return jsonify({"error": "account_count must be a positive integer"}), 400
-            
-        if not isinstance(min_transactions, int) or min_transactions <= 0:
-            return jsonify({"error": "min_transactions must be a positive integer"}), 400
-            
-        total_fraud = sum(fraud_patterns_config.values())
-        if total_fraud > account_count * 0.5:
-            return jsonify({
-                "error": f"Total fraud accounts ({total_fraud}) exceeds 50% of total accounts ({account_count})",
-                "hint": "Reduce fraud pattern counts or increase account_count"
-            }), 400
-        
-        # Get Neo4j connection details
-        neo4j_uri = os.getenv("NEO4J_URI")
-        neo4j_username = os.getenv("NEO4J_USERNAME")
-        neo4j_password = os.getenv("NEO4J_PASSWORD")
-        
-        if not neo4j_uri or not neo4j_username or not neo4j_password:
-            return jsonify({"error": "Neo4j connection details not found in environment variables"}), 500
-        
-        # Create generator
-        generator = Neo4jFraudDataGenerator(neo4j_uri, neo4j_username, neo4j_password)
-        
-        # Clear database if requested
-        if clear_db:
-            generator.clear_database()
-        
-        # Step 1: Create network structure with fraud patterns
-        G, fraud_accounts, community_map = generator.create_network_structure(
-            account_count, fraud_patterns_config
+        # Create graph generator
+        generator = BankFraudGraphGenerator(
+            uri=NEO4J_URI,
+            user=NEO4J_USER,
+            password=NEO4J_PASSWORD
         )
         
-        # Step 2: Calculate network metrics
-        account_metrics = generator.analyze_network(G, fraud_accounts, community_map)
+        # Generate graph data
+        graph_data = generator.generate_graph(
+            num_accounts=num_accounts,
+            num_transactions=num_transactions,
+            num_fraud_accounts=num_fraud_accounts
+        )
         
-        # Step 3: Generate transactions based on network structure
-        transactions = generator.generate_transactions_from_graph(G, account_metrics, min_transactions)
+        # Store transactions in MongoDB with txn_id
+        for transaction in graph_data['transactions']:
+            # Add a unique transaction ID
+            transaction['txn_id'] = str(uuid.uuid4())
+            # Store each transaction separately
+            transactions_collection.insert_one(transaction)
         
-        # Step 4: Save accounts to Neo4j
-        generator.save_accounts_to_neo4j(G, account_metrics)
+        # Store the entire graph data for reference
+        graph_id = fraud_graphs_collection.insert_one({
+            'created_at': datetime.now(),
+            'parameters': {
+                'num_accounts': num_accounts,
+                'num_transactions': num_transactions,
+                'num_fraud_accounts': num_fraud_accounts
+            },
+            'stats': graph_data['stats'],
+            'accounts': graph_data['accounts']
+        }).inserted_id
         
-        # Step 5: Save transactions to Neo4j
-        generator.save_transactions_to_neo4j(transactions)
-        
-        # Step 6: Save transactions to MongoDB
-        # Use the Transaction model to insert transactions
-        Transaction.insert_many(transactions)
-        
-        # Generate response
-        stats = {
-            "total_accounts": account_count,
-            "suspicious_accounts": len(fraud_accounts),
-            "transactions": len(transactions),
-            "fraud_patterns": {
-                pattern: count for pattern, count in fraud_patterns_config.items() if count > 0
-            }
-        }
-        
-        # Close the connection
-        generator.close()
-        
+        # Return the parameters and stats
         return jsonify({
-            "message": "Graph data generated successfully",
-            "stats": stats
+            'num_accounts': num_accounts,
+            'num_transactions': num_transactions,
+            'num_fraud_accounts': num_fraud_accounts,
+            'graph_id': str(graph_id),
+            'stats': graph_data['stats']
         })
         
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
-@bank_bp.route('/clear-transactions', methods=['DELETE'])
-def clear_transactions():
-    """Clear all transactions from MongoDB"""
-    try:
-        count = Transaction.clear_all()
-        return jsonify({
-            "message": "All transactions cleared successfully",
-            "previous_count": count
-        })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
 
 @bank_bp.route('/get-all-transactions', methods=['GET'])
 def get_all_transactions():
     """
-    Get all transactions from MongoDB
-    
-    Optional query parameters:
-    - limit: Max number of transactions to return (default: 1000)
-    - skip: Number of transactions to skip (for pagination)
-    - from_account: Filter by source account
-    - to_account: Filter by destination account
-    - min_amount: Filter by minimum amount
-    - max_amount: Filter by maximum amount
-    - transaction_type: Filter by transaction type
+    Returns all transactions stored in MongoDB
     """
     try:
-        # Get query parameters
-        # limit = request.args.get('limit', 1000, type=int)
-        skip = request.args.get('skip', 0, type=int)
-        from_account = request.args.get('from_account')
-        to_account = request.args.get('to_account')
-        min_amount = request.args.get('min_amount', type=float)
-        max_amount = request.args.get('max_amount', type=float)
-        transaction_type = request.args.get('transaction_type')
+        # Retrieve all transactions
+        cursor = transactions_collection.find({})
         
-        # Build query using the Transaction model
-        query = Transaction.build_query(
-            from_account, to_account, min_amount, max_amount, transaction_type
-        )
+        # Format transactions for response
+        transactions_list = []
+        for transaction in cursor:
+            # Convert ObjectId to string
+            if '_id' in transaction:
+                transaction['_id'] = str(transaction['_id'])
+            
+            # Include the transaction in the response
+            transactions_list.append({
+                'txn_id': transaction['txn_id'],
+                'from': transaction['from'],
+                'to': transaction['to'],
+                'amt': transaction['amt'],
+                'type': transaction['type'],
+                'currency': transaction['currency'],
+                'description': transaction['description'],
+                'createdDate': transaction['createdDate']
+            })
         
-        # Get transactions with pagination
-        transactions, total_count = Transaction.get_all(skip, query)
-        
-        return jsonify({
-            "transactions": transactions,
-        })
+        return jsonify({'transactions': transactions_list})
         
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({'error': str(e)}), 500
+
+
+@bank_bp.route('/get-transaction/<txn_id>', methods=['GET'])
+def get_transaction(txn_id):
+    """
+    Returns a specific transaction by txn_id
+    """
+    try:
+        # Find the transaction by txn_id
+        transaction = transactions_collection.find_one({'txn_id': txn_id})
+        
+        if not transaction:
+            return jsonify({'error': 'Transaction not found'}), 404
+        
+        # Convert ObjectId to string
+        if '_id' in transaction:
+            transaction['_id'] = str(transaction['_id'])
+        
+        return jsonify(transaction)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@bank_bp.route('/get-graph/<graph_id>', methods=['GET'])
+def get_graph(graph_id):
+    """
+    Returns a specific fraud graph by graph_id
+    """
+    try:
+        # Find the graph by graph_id
+        graph = fraud_graphs_collection.find_one({'_id': ObjectId(graph_id)})
+        
+        if not graph:
+            return jsonify({'error': 'Graph not found'}), 404
+        
+        # Convert ObjectId to string
+        if '_id' in graph:
+            graph['_id'] = str(graph['_id'])
+        
+        return jsonify(graph)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
