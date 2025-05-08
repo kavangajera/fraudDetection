@@ -71,7 +71,7 @@ def test_watchdog():
             df.to_csv(output_path, index=False)
 
             # Prepare response
-            response = {[
+            response = {"account_scores":[
                 {"accountNumber": acc, "calculatedFraudScore": score}
                 for acc, score in zip(df["accountNumber"], fraud_scores)
             ]}
