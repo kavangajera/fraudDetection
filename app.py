@@ -6,6 +6,7 @@ from routes.dummy_bank import bank_bp
 import os
 
 app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # Set max content length to 16MB
 CORS(app)  # Enable CORS for all domains
 
 # Register Blueprints under "/api"

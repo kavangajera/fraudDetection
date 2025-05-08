@@ -4,6 +4,11 @@ import uuid
 from datetime import datetime
 from pymongo import MongoClient
 from bson.objectid import ObjectId
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Import the BankFraudGraphGenerator class
 from network_creation import BankFraudGraphGenerator, FraudDetectionQueries
@@ -11,20 +16,20 @@ from network_creation import BankFraudGraphGenerator, FraudDetectionQueries
 # Create the blueprint
 bank_bp = Blueprint('bank', __name__)
 
+MONGO_URI = os.getenv('MONGO_URI')
+NEO4J_URI = os.getenv('NEO4J_URI')
+NEO4J_USER = os.getenv('NEO4J_USERNAME')
+NEO4J_PASSWORD = os.getenv('NEO4J_PASSWORD')
 # MongoDB connection
-client = MongoClient('mongodb+srv://devarshi:Deva123@cluster0.8e2qpsv.mongodb.net/Bank2')
+client = MongoClient(MONGO_URI)
 db = client['bank_fraud_db']
 transactions_collection = db['transactions']
 fraud_graphs_collection = db['fraud_graphs']
 
-# Neo4j connection parameters
-# NEO4J_URI = "neo4j+s://ae03c8f0.databases.neo4j.io"
-# NEO4J_USER = "neo4j"
-# NEO4J_PASSWORD = "Fa01ciGZHymObLA2cOv-UDQ96BCSr3Uq6Tlqur1Ye8E"  # Replace with your actual password
+# Neo4j connection details
+ # Replace with your actual password
 
-NEO4J_URI="bolt://localhost:7687"
-NEO4J_USER="neo4j"
-NEO4J_PASSWORD="Kavan#7377"
+
 
 @bank_bp.route('/create-graph', methods=['POST'])
 def create_graph():
@@ -34,11 +39,15 @@ def create_graph():
     Stores the entire graph data in MongoDB
     """
     try:
+        # Clear existing data from collections
+        transactions_collection.delete_many({})
+        fraud_graphs_collection.delete_many({})
+        # Drop the existing database to start fresh
         # Get parameters from request or use defaults
         data = request.get_json() or {}
-        num_accounts = data.get('num_accounts', 100)
-        num_transactions = data.get('num_transactions', 500)
-        num_fraud_accounts = data.get('num_fraud_accounts', 15)
+        num_accounts = data.get('num_accounts', 2)
+        num_transactions = data.get('num_transactions', 4)
+        num_fraud_accounts = data.get('num_fraud_accounts', 1)
         
         # Create graph generator
         generator = BankFraudGraphGenerator(

@@ -25,30 +25,19 @@ def custom_fraud_transformation(scores):
     rescaled = (boosted - np.min(boosted)) / (np.max(boosted) - np.min(boosted))
     return rescaled
 
-@test_bp.route('/', methods=['POST'])
+@test_bp.route('/', methods=['GET'])
 def test_watchdog():
     try:
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file part'}), 400
-
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({'error': 'No selected file'}), 400
-
-        if file and allowed_file(file.filename):
-            # Save file temporarily
-            os.makedirs('temp', exist_ok=True)
-            temp_file_path = os.path.join('temp', secure_filename(file.filename))
-            file.save(temp_file_path)
+        
 
             # Load model and scaler
-            model_path = os.path.join(MODEL_FOLDER, 'model', 'isolation_forest_model_fraud_focused.pkl')
-            scaler_path = os.path.join(MODEL_FOLDER, 'scaler', 'scaler_fraud_focused.pkl')
+            model_path = os.path.join(MODEL_FOLDER, 'model', 'isolation_forest_model_fraud_focused_new.pkl')
+            scaler_path = os.path.join(MODEL_FOLDER, 'scaler', 'scaler_fraud_focused_new.pkl')
             model = joblib.load(model_path)
             scaler = joblib.load(scaler_path)
 
             # Load CSV and preprocess
-            df = pd.read_csv(temp_file_path)
+            df = pd.read_csv('data/acc_list_with_params.csv')
 
             # Drop non-feature columns
             drop_cols = [
