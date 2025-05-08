@@ -71,12 +71,16 @@ def test_watchdog():
             df.to_csv(output_path, index=False)
 
             # Prepare response
-            response = {"account_scores":[
-                {"accountNumber": acc, "calculatedFraudScore": score}
-                for acc, score in zip(df["accountNumber"], fraud_scores)
-            ]}
+            # Prepare response with camelCase keys (Java convention)
+            response = [
+                {
+                    "accountNumber": str(acc),  # ensure JSON-safe string if needed
+                    "calculatedFraudScore": float(score)  # ensure JSON serializable
+                }
+                for acc, score in zip(df["accountNumber"], df["calculated_fraud_score"])
+            ]
 
-            return jsonify(response), 200
+            return jsonify({"accounts": response}), 200
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
