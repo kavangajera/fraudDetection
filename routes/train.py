@@ -43,26 +43,30 @@ def train_watchdog():
         
         if 'file' not in request.files:
             return jsonify({'error': 'No file part'}), 400
-        
+
         file = request.files['file']
         if file.filename == '':
             return jsonify({'error': 'No selected file'}), 400
-            
+
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
             filepath = os.path.join(UPLOAD_FOLDER, filename)
             file.save(filepath)
-            
+
             # Load data
             df = pd.read_csv(filepath)
-            
-            # Prepare feature matrix
-            X = df.drop(columns=["a.accountNumber", "a.is_fraud", "a.fraud_score"], errors="ignore")
-            
+
+            # Drop non-feature columns
+            drop_cols = [
+                'accountNumber', 'type', 'user',
+                'is_suspicious', 'suspicious', 'fraudScore'
+            ]
+            X = df.drop(columns=drop_cols, errors='ignore')
+
             # Apply StandardScaler
             scaler = StandardScaler()
             X_scaled = scaler.fit_transform(X)
-            
+
             # Train Isolation Forest
             model = IsolationForest(
                 n_estimators=300,
@@ -74,32 +78,32 @@ def train_watchdog():
                 random_state=42,
                 verbose=0
             )
-            
+
             model.fit(X_scaled)
-            
-            # Calculate scores and transform
+
+            # Score and transform
             raw_scores = -model.decision_function(X_scaled)
             fraud_scores = custom_fraud_transformation(raw_scores)
-            
-            # Add scores to dataframe
-            df["fraud_score"] = fraud_scores
-            
-            # Save results
+
+            # Add fraud scores
+            df['fraud_score'] = fraud_scores
+
+            # Save results and models
             scored_csv_path = os.path.join(UPLOAD_FOLDER, 'scored_fraud_data_optimized.csv')
             model_path = os.path.join(MODEL_FOLDER, 'model', 'isolation_forest_model_fraud_focused.pkl')
             scaler_path = os.path.join(MODEL_FOLDER, 'scaler', 'scaler_fraud_focused.pkl')
-            
+
             df.to_csv(scored_csv_path, index=False)
             joblib.dump(model, model_path)
             joblib.dump(scaler, scaler_path)
-            
-            # Create response array
+
+            # Prepare response
             response_data = [
-                {"accountNo": acc, "fraudScore": score} 
-                for acc, score in zip(df["a.accountNumber"], df["fraud_score"])
+                {"accountNo": acc, "fraudScore": score}
+                for acc, score in zip(df["accountNumber"], fraud_scores)
             ]
-            
+
             return jsonify(response_data), 200
-            
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500

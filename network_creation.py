@@ -554,9 +554,9 @@ if __name__ == "__main__":
     # Generate data
     generator = BankFraudGraphGenerator(uri, user, password)
     data = generator.generate_graph(
-        num_accounts=100,
-        num_transactions=500,
-        num_fraud_accounts=5,
+        num_accounts=10000,
+        num_transactions=60000,
+        num_fraud_accounts=377,
         output_file="bank_fraud_data.json"
     )
     

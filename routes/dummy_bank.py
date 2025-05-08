@@ -159,3 +159,78 @@ def get_graph(graph_id):
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    
+
+
+
+import csv
+import io
+from flask import Response
+from neo4j import GraphDatabase
+
+# Neo4j driver initialization (if not already initialized elsewhere)
+driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
+
+import os
+
+# Ensure this directory exists
+DATA_DIR = os.path.join(os.getcwd(), 'data')
+os.makedirs(DATA_DIR, exist_ok=True)
+
+@bank_bp.route('/filtered-accounts', methods=['POST'])
+def filtered_accounts():
+    """
+    Receives a list of account objects and saves a CSV of matched accounts from Neo4j,
+    including the is_suspicious flag from the input, to data/acc_list_with_params.csv
+    """
+    try:
+        data = request.get_json()
+        if not isinstance(data, list):
+            return jsonify({"error": "Invalid data format. Expected a list of objects."}), 400
+
+        # Map accountNumber to is_suspicious
+        account_map = {
+            item["accountNumber"]: item.get("is_suspicious", False)
+            for item in data if "accountNumber" in item
+        }
+        account_numbers = list(account_map.keys())
+
+        if not account_numbers:
+            return jsonify({"error": "No valid accountNumber fields found."}), 400
+
+        query = """
+        MATCH (a:Account)
+        WHERE a.accountNumber IN $account_numbers
+        RETURN a
+        """
+
+        records = []
+        with driver.session() as session:
+            result = session.run(query, account_numbers=account_numbers)
+            for record in result:
+                node = record["a"]
+                node_data = dict(node)
+                acc_number = node_data.get("accountNumber")
+                node_data["is_suspicious"] = account_map.get(acc_number, False)
+                records.append(node_data)
+
+        if not records:
+            return jsonify({"message": "No matching accounts found in Neo4j."}), 404
+
+        # Write to CSV
+        fieldnames = sorted(set().union(*(row.keys() for row in records)))
+        csv_path = os.path.join(DATA_DIR, 'acc_list_with_params.csv')
+
+        with open(csv_path, mode='w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(records)
+
+        return jsonify({
+            "message": "CSV saved successfully.",
+            "path": f"data/acc_list_with_params.csv",
+            "record_count": len(records)
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
