@@ -9,3 +9,4 @@ werkzeug
 networkx
 neo4j
 python-dotenv
+pymongo
