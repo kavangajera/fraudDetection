@@ -25,15 +25,27 @@ def ensure_directories():
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 def custom_fraud_transformation(scores):
+    # Check if all scores are identical
+    if np.max(scores) == np.min(scores):
+        # If all scores are the same, return an array of 0.5
+        return np.full_like(scores, 0.5)
+    
     # Apply exponential transformation to emphasize high anomaly scores
-    # This will push higher scores (likely frauds) closer to 1
-    transformed = np.exp(scores * 2) / np.exp(np.max(scores) * 2)
+    # Use a safer approach to avoid overflow
+    scores_normalized = scores - np.min(scores)  # Shift to start at 0
+    transformed = np.exp(scores_normalized * 2) / np.exp(np.max(scores_normalized) * 2)
     
     # Further boost separation by applying a power transformation
     boosted = np.power(transformed, 1.5)
     
-    # Rescale to [0,1]
-    rescaled = (boosted - np.min(boosted)) / (np.max(boosted) - np.min(boosted))
+    # Rescale to [0,1] with safeguard against division by zero
+    range_value = np.max(boosted) - np.min(boosted)
+    if range_value > 0:
+        rescaled = (boosted - np.min(boosted)) / range_value
+    else:
+        # If all values are the same after transformation, return uniform values
+        rescaled = np.full_like(boosted, 0.5)
+    
     return rescaled
 
 @train_bp.route('/', methods=['POST'])
